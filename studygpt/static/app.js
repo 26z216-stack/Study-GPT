@@ -30,7 +30,7 @@
     toggle.addEventListener('click', () => {
       const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
       document.documentElement.dataset.theme = next;
-      try { localStorage.setItem('kanal-theme', next); } catch (e) {}
+      try { localStorage.setItem('studygpt-theme', next); } catch (e) {}
     });
   }
 

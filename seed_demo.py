@@ -1,6 +1,6 @@
 """Create a demo account with realistic subjects, topics and history.
 
-    python seed_demo.py      ->  log in as demo@kanal.app / demo123
+    python seed_demo.py      ->  log in as demo@studygpt.app / demo123
 """
 import json
 from datetime import date, timedelta
@@ -10,11 +10,11 @@ from werkzeug.security import generate_password_hash
 
 load_dotenv()
 
-from kanal import create_app, db  # noqa: E402
-from kanal.models import Availability, Flashcard, QuizAttempt, StudySession, Subject, Topic, User  # noqa: E402
-from kanal.plan_service import replan  # noqa: E402
+from studygpt import create_app, db  # noqa: E402
+from studygpt.models import Availability, Flashcard, QuizAttempt, StudySession, Subject, Topic, User  # noqa: E402
+from studygpt.plan_service import replan  # noqa: E402
 
-EMAIL, PASSWORD = 'demo@kanal.app', 'demo123'
+EMAIL, PASSWORD = 'demo@studygpt.app', 'demo123'
 T = date.today()
 
 SUBJECTS = [

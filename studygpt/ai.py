@@ -103,7 +103,7 @@ Return JSON: {{
 
 def coach_reply(context, history, message):
     convo = '\n'.join(f"{m['role'].upper()}: {m['content']}" for m in history[-10:])
-    data = ask_json(f"""You are Kanal, a warm, practical AI study coach. Use the student's real plan below.
+    data = ask_json(f"""You are StudyGPT, a warm, practical AI study coach. Use the student's real plan below.
 Be specific (name subjects, topics, dates). Keep answers under 150 words. Use short bullet points when listing.
 If they are behind, suggest what to cut or reprioritise. Never invent topics that aren't in the plan.
 

@@ -4,8 +4,8 @@ import unittest
 from datetime import date, timedelta
 from unittest import mock
 
-from kanal import create_app, db
-from kanal.models import Flashcard, StudySession, Topic
+from studygpt import create_app, db
+from studygpt.models import Flashcard, StudySession, Topic
 
 FAKE = {
     'topics': [{'name': 'Kinematics', 'difficulty': 4, 'est_hours': 3},
@@ -24,7 +24,7 @@ class AppTest(unittest.TestCase):
         self.app = create_app({'TESTING': True, 'WTF_CSRF_ENABLED': False,
                                'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:'})
         self.c = self.app.test_client()
-        self.patch = mock.patch('kanal.ai.ask_json', return_value=FAKE)
+        self.patch = mock.patch('studygpt.ai.ask_json', return_value=FAKE)
         self.patch.start()
 
     def tearDown(self):

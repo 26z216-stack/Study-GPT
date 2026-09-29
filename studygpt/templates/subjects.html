@@ -83,7 +83,7 @@
 
     <section class="card">
       <h2>Your free study hours</h2>
-      <p class="muted small">Kanal never plans more than this per day.{% if windows %} Saving these replaces the AI time slots.{% endif %}</p>
+      <p class="muted small">StudyGPT never plans more than this per day.{% if windows %} Saving these replaces the AI time slots.{% endif %}</p>
       <form method="post" action="{{ url_for('planner.save_availability') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% for d in range(7) %}

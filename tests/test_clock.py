@@ -1,6 +1,6 @@
 import unittest
 
-from kanal.clock import assign_times
+from studygpt.clock import assign_times
 
 
 class AssignTimesTest(unittest.TestCase):

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # read .env before the app reads its config
 
-from kanal import create_app  # noqa: E402
+from studygpt import create_app  # noqa: E402
 
 app = create_app()
 

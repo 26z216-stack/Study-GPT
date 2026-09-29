@@ -48,7 +48,7 @@ def dashboard():
     if current_user.last_replan != today:
         moved = replan(current_user, today)
         if moved:
-            flash(f'You missed {moved} session(s). Kanal has rescheduled that work into your upcoming days.', 'info')
+            flash(f'You missed {moved} session(s). StudyGPT has rescheduled that work into your upcoming days.', 'info')
 
     todays = (StudySession.query.filter_by(user_id=current_user.id, date=today)
               .filter(StudySession.status != 'missed').order_by(StudySession.id).all())
@@ -301,7 +301,7 @@ def timetable_ics():
                                           StudySession.date >= date.today())
                 .order_by(StudySession.date, StudySession.id).all())
     attach_times(current_user, sessions)
-    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kanal//Study Planner//EN', 'X-WR-CALNAME:Kanal study plan']
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//StudyGPT//Study Planner//EN', 'X-WR-CALNAME:StudyGPT study plan']
     cursor = {}
     for s in sessions:
         start = cursor.get(s.date, datetime.combine(s.date, datetime.min.time()).replace(hour=18))
@@ -310,16 +310,16 @@ def timetable_ics():
         end = start + timedelta(minutes=s.minutes)
         cursor[s.date] = end
         title = f'{"Revise" if s.kind == "revision" else "Study"}: {s.topic.subject.name} - {s.topic.name}'
-        lines += ['BEGIN:VEVENT', f'UID:kanal-{s.id}@kanal', f'DTSTAMP:{datetime.utcnow():%Y%m%dT%H%M%SZ}',
+        lines += ['BEGIN:VEVENT', f'UID:studygpt-{s.id}@studygpt', f'DTSTAMP:{datetime.utcnow():%Y%m%dT%H%M%SZ}',
                   f'DTSTART:{start:%Y%m%dT%H%M%S}', f'DTEND:{end:%Y%m%dT%H%M%S}',
                   'SUMMARY:' + title.replace(',', '\\,').replace(';', '\\;'), 'END:VEVENT']
     for s in Subject.query.filter_by(user_id=current_user.id):
         if s.exam_date and s.exam_date >= date.today():
-            lines += ['BEGIN:VEVENT', f'UID:kanal-exam-{s.id}@kanal', f'DTSTAMP:{datetime.utcnow():%Y%m%dT%H%M%SZ}',
+            lines += ['BEGIN:VEVENT', f'UID:studygpt-exam-{s.id}@studygpt', f'DTSTAMP:{datetime.utcnow():%Y%m%dT%H%M%SZ}',
                       f'DTSTART;VALUE=DATE:{s.exam_date:%Y%m%d}', f'SUMMARY:EXAM: {s.name}', 'END:VEVENT']
     lines.append('END:VCALENDAR')
     return Response('\r\n'.join(lines), mimetype='text/calendar',
-                    headers={'Content-Disposition': 'attachment; filename=kanal-plan.ics'})
+                    headers={'Content-Disposition': 'attachment; filename=studygpt-plan.ics'})
 
 
 # ── Report ───────────────────────────────────────────────────────────────────

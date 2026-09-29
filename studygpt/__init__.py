@@ -15,7 +15,7 @@ def create_app(test_config=None):
 
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-only-change-me')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-        'DATABASE_URL', 'sqlite:///' + os.path.join(app.instance_path, 'kanal.db'))
+        'DATABASE_URL', 'sqlite:///' + os.path.join(app.instance_path, 'studygpt.db'))
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     if test_config:
         app.config.update(test_config)

@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
-from kanal.scheduler import build_plan, topic_score, remaining_minutes
+from studygpt.scheduler import build_plan, topic_score, remaining_minutes
 
 TODAY = date(2026, 10, 1)  # a Thursday
 

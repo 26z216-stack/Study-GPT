@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "kanal", "runtimeExecutable": ".venv/Scripts/python.exe", "runtimeArgs": ["start.py"], "port": 5000 }
+    { "name": "studygpt", "runtimeExecutable": ".venv/Scripts/python.exe", "runtimeArgs": ["start.py"], "port": 5000 }
   ]
 }

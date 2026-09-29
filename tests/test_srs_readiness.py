@@ -1,8 +1,8 @@
 import unittest
 from datetime import date, timedelta
 
-from kanal.srs import review, NEW_CARD
-from kanal.readiness import subject_readiness, overall_readiness
+from studygpt.srs import review, NEW_CARD
+from studygpt.readiness import subject_readiness, overall_readiness
 
 TODAY = date(2026, 10, 1)
 

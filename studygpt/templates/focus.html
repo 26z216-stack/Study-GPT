@@ -38,7 +38,7 @@
 <script>
 // Timer state lives in localStorage and is derived from the clock (FocusTimerCore),
 // so leaving the page or sleeping the laptop doesn't lose or distort time.
-const KEY = 'kanal-focus', C = FocusTimerCore;
+const KEY = 'studygpt-focus', C = FocusTimerCore;
 const clock = document.getElementById('clock'), startBtn = document.getElementById('start'),
       pauseBtn = document.getElementById('pause'), doneForm = document.getElementById('done-form');
 let chosen = {{ (session.minutes if session and session.minutes <= 60 else 25) }};
@@ -50,7 +50,7 @@ function fmt(s) { return String(Math.floor(s / 60)).padStart(2, '0') + ':' + Str
 function render() {
   const secs = state ? C.remainingSecs(state) : chosen * 60;
   clock.textContent = fmt(secs);
-  document.title = (state && !state.pausedAt ? fmt(secs) + ' · ' : '') + 'Focus · Kanal';
+  document.title = (state && !state.pausedAt ? fmt(secs) + ' · ' : '') + 'Focus · StudyGPT';
   startBtn.style.display = state && !state.pausedAt ? 'none' : '';
   startBtn.textContent = state && state.pausedAt ? '▶ Resume' : '▶ Start';
   pauseBtn.style.display = state && !state.pausedAt ? '' : 'none';
@@ -59,7 +59,7 @@ function render() {
     if (!state.notified) {
       state.notified = true; save();
       try { new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=').play(); } catch (e) {}
-      if ('Notification' in window && Notification.permission === 'granted') new Notification('Kanal: session complete!');
+      if ('Notification' in window && Notification.permission === 'granted') new Notification('StudyGPT: session complete!');
     }
     if (doneForm) doneForm.style.display = 'block';
   }
