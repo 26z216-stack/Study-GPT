@@ -2,6 +2,7 @@
 
     python seed_demo.py      ->  log in as demo@kanal.app / demo123
 """
+import json
 from datetime import date, timedelta
 
 from dotenv import load_dotenv
@@ -46,8 +47,17 @@ with app.app_context():
     u = User(email=EMAIL, name='Demo Student', password_hash=generate_password_hash(PASSWORD))
     db.session.add(u)
     db.session.flush()
-    for d, hours in enumerate([2, 2, 1.5, 2, 1, 5, 4]):
-        db.session.add(Availability(user_id=u.id, weekday=d, minutes=int(hours * 60)))
+    u.routine = ('College 9am to 4pm Monday to Friday, bus home takes an hour. Gym 6-7pm on Mon, Wed, Fri. '
+                 'Tuition on Tuesday and Thursday 5-6:30pm. I focus best in the mornings. '
+                 'Saturday free after 11am, Sunday family lunch 12-3. I sleep by 11pm.')
+    # What the AI routine parser returns for the routine above (pre-filled so the demo works offline).
+    week = [[['07:00', '08:30'], ['19:30', '21:30']], [['07:00', '08:30'], ['18:30', '21:30']],
+            [['07:00', '08:30'], ['19:30', '21:30']], [['07:00', '08:30'], ['18:30', '21:30']],
+            [['07:00', '08:30'], ['19:30', '21:30']], [['11:30', '13:30'], ['18:30', '21:30']],
+            [['10:00', '11:30'], ['16:00', '17:30']]]
+    for d, windows in enumerate(week):
+        minutes = sum(int(b[:2]) * 60 + int(b[3:]) - int(a[:2]) * 60 - int(a[3:]) for a, b in windows)
+        db.session.add(Availability(user_id=u.id, weekday=d, minutes=min(minutes, 240), windows=json.dumps(windows)))
 
     first_topics = []
     for name, color, diff, prio, days, topics in SUBJECTS:

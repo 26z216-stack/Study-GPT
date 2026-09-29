@@ -49,5 +49,15 @@ def create_app(test_config=None):
 
     with app.app_context():
         db.create_all()
+        _add_missing_columns()
 
     return app
+
+
+def _add_missing_columns():
+    from sqlalchemy import inspect, text
+    for table, column in [('availability', 'windows'), ('user', 'routine')]:
+        cols = {c['name'] for c in inspect(db.engine).get_columns(table)}
+        if column not in cols:
+            with db.engine.begin() as conn:
+                conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN {column} TEXT'))

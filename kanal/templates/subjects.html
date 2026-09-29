@@ -63,9 +63,27 @@
       </form>
     </section>
 
+    <section class="card" style="border-color:var(--accent)">
+      <h2>✨ Describe your routine</h2>
+      <p class="muted small">Write your week in plain words. AI finds your free study slots, and the timetable gets real clock times.</p>
+      <form method="post" action="{{ url_for('planner.availability_ai') }}" data-busy="Reading your routine…">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <textarea name="routine" rows="5" required placeholder="College 9am–4pm Mon–Fri, bus home takes an hour. Gym 6–7pm on Mon/Wed/Fri. I focus best in the mornings. Saturday free after 11, Sunday family lunch 12–3. Sleep by 11pm.">{{ routine }}</textarea>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px">Build my schedule</button>
+      </form>
+      {% if windows %}
+        <hr class="divider">
+        <p class="small" style="margin-bottom:4px"><b>Your free slots</b></p>
+        {% for d in range(7) %}
+          <div class="small" style="display:flex;gap:8px"><span style="width:36px;font-weight:700">{{ weekdays[d] }}</span>
+            <span class="muted">{% for w in windows.get(d, []) %}{{ w[0] }}–{{ w[1] }}{{ ', ' if not loop.last }}{% else %}rest{% endfor %}</span></div>
+        {% endfor %}
+      {% endif %}
+    </section>
+
     <section class="card">
       <h2>Your free study hours</h2>
-      <p class="muted small">Kanal never plans more than this per day.</p>
+      <p class="muted small">Kanal never plans more than this per day.{% if windows %} Saving these replaces the AI time slots.{% endif %}</p>
       <form method="post" action="{{ url_for('planner.save_availability') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% for d in range(7) %}

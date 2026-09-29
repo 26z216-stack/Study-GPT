@@ -135,6 +135,52 @@ Return JSON: {{"headline": str (one sentence), "focus": [str] (3 concrete priori
             'risk': str(data.get('risk', ''))}
 
 
+def parse_routine(routine_text):
+    """Turn a plain-language weekly routine into free study windows per weekday."""
+    data = ask_json(f"""A student describes their weekly routine. Work out the time windows each day when
+they are FREE TO STUDY. Leave out sleep, classes, commute, meals, exercise and anything else they mention.
+Leave a short gap after classes/commute/exercise, but DO include the free time after an activity ends
+(e.g. gym 6-7pm and sleep at 11pm -> free roughly 7:30-10:30pm). Leave time for dinner. Respect any stated preferences (e.g. "I study best in the morning",
+"max 3 hours a day", "keep Sunday light"). If they don't mention a day, assume a sensible evening window.
+Don't make the total study time unrealistic: at most 8h on any day, and usually 1-4h on weekdays.
+
+Routine:
+\"\"\"{routine_text[:3000]}\"\"\"
+
+Return JSON: {{
+  "days": {{"0": [["HH:MM", "HH:MM"], ...], ..., "6": [...]}}  (0=Monday ... 6=Sunday, 24h time, empty list = no study),
+  "peak": "morning" | "afternoon" | "evening" | "night" (when they focus best; guess if not stated),
+  "summary": str (one friendly sentence describing the plan's shape)
+}}""")
+    days = {}
+    for d in range(7):
+        windows = []
+        for w in (data.get('days') or {}).get(str(d)) or []:
+            try:
+                start, end = _to_min(w[0]), _to_min(w[1])
+            except (TypeError, ValueError, IndexError):
+                continue
+            if end - start >= 30:
+                windows.append([_fmt(start), _fmt(end)])
+        days[d] = sorted(windows)
+    if not any(days.values()):
+        raise AIError('The AI could not find any free time in that routine. Add a bit more detail.')
+    return {'days': days, 'peak': str(data.get('peak') or ''), 'summary': str(data.get('summary') or '')}
+
+
+def _to_min(hhmm):
+    h, m = str(hhmm).strip().split(':')
+    h, m = int(h), int(m)
+    if not (0 <= h <= 24 and 0 <= m < 60):
+        raise ValueError(hhmm)
+    return min(24 * 60, h * 60 + m)
+
+
+def _fmt(minutes):
+    minutes = min(minutes, 24 * 60 - 1)
+    return f'{minutes // 60:02d}:{minutes % 60:02d}'
+
+
 def _clamp_hours(value):
     try:
         return round(max(0.5, min(10.0, float(value))) * 2) / 2

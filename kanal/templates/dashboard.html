@@ -25,7 +25,7 @@
           <span class="stripe" style="background:{{ s.topic.subject.color }}"></span>
           <div class="body">
             <div class="title">{{ s.topic.name }}</div>
-            <div class="muted small">{{ s.topic.subject.name }} · {{ s.minutes }} min
+            <div class="muted small">{% if s.start %}<b style="color:var(--accent)">{{ s.start }}–{{ s.end }}</b> · {% endif %}{{ s.topic.subject.name }} · {{ s.minutes }} min
               {% if s.kind == 'revision' %}<span class="pill pill-warn">revision</span>{% endif %}
               <span class="pill">confidence {{ s.topic.confidence }}%</span></div>
           </div>

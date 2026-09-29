@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
@@ -5,7 +6,7 @@ from flask_login import current_user, login_required
 
 from . import ai, db
 from .models import Availability, Flashcard, StudySession, Subject, Topic
-from .plan_service import (availability_for, owned_subject_or_404, owned_topic_or_404, plan_context,
+from .plan_service import (attach_times, availability_for, windows_for, owned_subject_or_404, owned_topic_or_404, plan_context,
                            readiness_by_subject, replan)
 
 planner = Blueprint('planner', __name__)
@@ -51,6 +52,7 @@ def dashboard():
 
     todays = (StudySession.query.filter_by(user_id=current_user.id, date=today)
               .filter(StudySession.status != 'missed').order_by(StudySession.id).all())
+    attach_times(current_user, todays)
     rows, overall = readiness_by_subject(current_user)
     upcoming_exams = sorted([s for s in subjects if s.exam_date and s.exam_date >= today],
                             key=lambda s: s.exam_date)
@@ -121,6 +123,7 @@ def subjects():
             return redirect(url_for('planner.syllabus', subject_id=s.id))
     subs = Subject.query.filter_by(user_id=current_user.id).order_by(Subject.exam_date).all()
     return render_template('subjects.html', subjects=subs, avail=availability_for(current_user),
+                           windows=windows_for(current_user), routine=current_user.routine or '',
                            weekdays=WEEKDAYS, next_color=COLORS[len(subs) % len(COLORS)])
 
 
@@ -160,10 +163,42 @@ def save_availability():
             row = Availability(user_id=current_user.id, weekday=d)
             db.session.add(row)
         row.minutes = int(round(hours * 60))
+        row.windows = None   # manual hours replace any AI time windows
     db.session.commit()
     replan(current_user)
     flash('Availability saved and plan regenerated.', 'success')
     return redirect(url_for('planner.subjects'))
+
+
+@planner.route('/availability/ai', methods=['POST'])
+@login_required
+def availability_ai():
+    text = request.form.get('routine', '').strip()
+    if len(text) < 10:
+        flash('Describe your routine first.', 'error')
+        return redirect(url_for('planner.subjects'))
+    try:
+        parsed = ai.parse_routine(text)
+    except ai.AIError as e:
+        flash(str(e), 'error')
+        return redirect(url_for('planner.subjects'))
+    for d, windows in parsed['days'].items():
+        row = Availability.query.filter_by(user_id=current_user.id, weekday=d).first()
+        if not row:
+            row = Availability(user_id=current_user.id, weekday=d)
+            db.session.add(row)
+        row.windows = json.dumps(windows)
+        row.minutes = min(8 * 60, sum(_mins(b) - _mins(a) for a, b in windows))   # never plan more than 8h a day
+    current_user.routine = text
+    db.session.commit()
+    replan(current_user)
+    flash('✨ ' + (parsed['summary'] or 'Your routine is set.') + ' Your timetable now has real clock times.', 'success')
+    return redirect(url_for('planner.timetable'))
+
+
+def _mins(hhmm):
+    h, m = hhmm.split(':')
+    return int(h) * 60 + int(m)
 
 
 # ── Syllabus ─────────────────────────────────────────────────────────────────
@@ -247,13 +282,14 @@ def timetable():
     sessions = (StudySession.query.filter(StudySession.user_id == current_user.id,
                                           StudySession.date >= days[0], StudySession.date <= days[-1])
                 .order_by(StudySession.date, StudySession.id).all())
+    attach_times(current_user, sessions)
     by_day = {d: [] for d in days}
     for s in sessions:
         by_day[s.date].append(s)
     exams = {s.exam_date: s for s in Subject.query.filter_by(user_id=current_user.id) if s.exam_date}
     avail = availability_for(current_user)
     return render_template('timetable.html', days=days, by_day=by_day, exams=exams, offset=offset,
-                           today=today, avail=avail)
+                           today=today, avail=avail, windows=windows_for(current_user))
 
 
 @planner.route('/timetable.ics')
@@ -264,10 +300,13 @@ def timetable_ics():
                                           StudySession.status == 'planned',
                                           StudySession.date >= date.today())
                 .order_by(StudySession.date, StudySession.id).all())
+    attach_times(current_user, sessions)
     lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kanal//Study Planner//EN', 'X-WR-CALNAME:Kanal study plan']
     cursor = {}
     for s in sessions:
         start = cursor.get(s.date, datetime.combine(s.date, datetime.min.time()).replace(hour=18))
+        if s.start:
+            start = datetime.combine(s.date, datetime.strptime(s.start, '%H:%M').time())
         end = start + timedelta(minutes=s.minutes)
         cursor[s.date] = end
         title = f'{"Revise" if s.kind == "revision" else "Study"}: {s.topic.subject.name} - {s.topic.name}'

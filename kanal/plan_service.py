@@ -1,9 +1,11 @@
 """Glue between the DB and the pure scheduler / readiness modules."""
+import json
 from collections import defaultdict
 from datetime import date
 
 from . import db
 from .models import Availability, StudySession, Subject, Topic
+from .clock import assign_times
 from .readiness import overall_readiness, subject_readiness
 from .scheduler import build_plan
 
@@ -13,6 +15,34 @@ DEFAULT_MINUTES = 120
 def availability_for(user):
     rows = {a.weekday: a.minutes for a in Availability.query.filter_by(user_id=user.id)}
     return {d: rows.get(d, DEFAULT_MINUTES) for d in range(7)}
+
+
+def windows_for(user):
+    """Free-time windows per weekday from the AI routine parser ({} if never set)."""
+    out = {}
+    for a in Availability.query.filter_by(user_id=user.id):
+        if a.windows:
+            try:
+                out[a.weekday] = json.loads(a.windows)
+            except ValueError:
+                pass
+    return out
+
+
+def attach_times(user, sessions):
+    """Set .start/.end on each non-missed session, grouped by day, laid into that day's windows."""
+    windows = windows_for(user)
+    by_day = defaultdict(list)
+    for s in sessions:
+        s.start = s.end = None
+        if s.status != 'missed':
+            by_day[s.date].append(s)
+    for day, items in by_day.items():
+        if windows.get(day.weekday()):
+            for s, t in zip(items, assign_times([s.minutes for s in items], windows[day.weekday()])):
+                if t:
+                    s.start, s.end = t
+    return sessions
 
 
 def replan(user, today=None):
@@ -100,6 +130,11 @@ def plan_context(user):
     missed = StudySession.query.filter_by(user_id=user.id, status='missed').count()
     done = StudySession.query.filter_by(user_id=user.id, status='done').count()
     lines.append(f'\nSessions completed: {done}, missed: {missed}.')
+    wins = windows_for(user)
+    if wins:
+        lines.append('Free study windows: ' + '; '.join(
+            f"{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d]} " + ', '.join(f'{a}-{b}' for a, b in wins[d])
+            for d in sorted(wins) if wins[d]))
     avail = availability_for(user)
     lines.append('Daily availability (min): ' + ', '.join(
         f'{d}={avail[i]}' for i, d in enumerate(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])))

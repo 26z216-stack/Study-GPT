@@ -11,6 +11,7 @@ class User(db.Model, UserMixin):
     name          = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     last_replan   = db.Column(db.Date, nullable=True)
+    routine       = db.Column(db.Text, nullable=True)   # plain-language weekly routine
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     subjects      = db.relationship('Subject', backref='user', lazy=True, cascade='all, delete-orphan')
 
@@ -50,6 +51,7 @@ class Availability(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     weekday = db.Column(db.Integer, nullable=False)   # 0=Mon .. 6=Sun
     minutes = db.Column(db.Integer, default=120)
+    windows = db.Column(db.Text, nullable=True)   # JSON [["16:30", "18:00"], ...] from the AI routine parser
 
 
 class StudySession(db.Model):

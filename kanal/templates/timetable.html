@@ -20,10 +20,12 @@
     {% set used = list | rejectattr('status', 'equalto', 'missed') | sum(attribute='minutes') %}
     <div class="day {{ 'today' if d == today }} {{ 'past' if d < today }}">
       <div class="day-head"><b>{{ d.strftime('%a') }} {{ d.day }}</b><span class="muted small">{{ used }}/{{ avail[d.weekday()] }}m</span></div>
+      {% if windows.get(d.weekday()) %}<div class="muted small" style="margin:-4px 0 6px">🕒 {% for w in windows[d.weekday()] %}{{ w[0] }}–{{ w[1] }}{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
       {% if d in exams %}<div class="exam-flag">📝 {{ exams[d].name }} EXAM</div>{% endif %}
       {% for s in list %}
         <a class="slot {{ s.status }}" style="border-color:{{ s.topic.subject.color }};color:inherit;display:block;text-decoration:none"
            href="{{ url_for('learn.topic', topic_id=s.topic_id) }}" title="{{ s.topic.subject.name }}: {{ s.topic.name }}">
+          {% if s.start %}<span class="small" style="font-weight:700;color:var(--accent)">{{ s.start }}–{{ s.end }}</span>{% endif %}
           <b>{{ s.topic.name }}</b>
           <span class="muted">{{ s.topic.subject.name }} · {{ s.minutes }}m</span>
           {% if s.kind == 'revision' %}<span class="pill pill-warn">revise</span>{% endif %}
