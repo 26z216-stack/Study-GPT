@@ -14,7 +14,8 @@ BLOCK_MIN = 30
 BLOCK_MAX = 60
 NO_EXAM_HORIZON_DAYS = 28   # subjects without an exam date are planned over 4 weeks
 MAX_HORIZON_DAYS = 90
-SAME_DAY_PENALTY = 0.35     # each block a topic already has today scales its score by this
+SAME_DAY_PENALTY = 0.35
+BREAK_MIN = 10              # break after each block inside a free window (matches clock.py)     # each block a topic already has today scales its score by this
 
 
 def _round_up(minutes, step=BLOCK_MIN):
@@ -42,11 +43,14 @@ def topic_score(topic, subject, day):
     return urgency * weight * max(gap, 0.05)
 
 
-def build_plan(subjects, topics, availability, today, used_today=0):
+def build_plan(subjects, topics, availability, today, used_today=0, windows=None):
     """Return a list of {date, topic_id, subject_id, minutes, kind} from today onward.
 
     availability maps weekday (0=Mon) to minutes available that day;
     used_today is minutes already studied today, taken off today's budget.
+    windows optionally maps weekday to the lengths (minutes) of that day's free
+    time windows; blocks are then packed per window, with a break after each,
+    so they're guaranteed to fit when clock times are assigned.
     """
     subj_by_id = {s['id']: s for s in subjects}
     exams = {s['id']: exam_date_of(s, today) for s in subjects}
@@ -54,51 +58,68 @@ def build_plan(subjects, topics, availability, today, used_today=0):
     remaining = {t['id']: remaining_minutes(t) for t in topics}
     if not topics or not exams:
         return []
+    windows = windows or {}
 
     last_day = min(max(exams.values()), today + timedelta(days=MAX_HORIZON_DAYS))
     plan = []
     day = today
     while day < last_day:
-        budget = availability.get(day.weekday(), 0) - (used_today if day == today else 0)
-        cap = (max(0, budget) // BLOCK_MIN) * BLOCK_MIN
+        budget = max(0, availability.get(day.weekday(), 0) - (used_today if day == today else 0))
+        gaps = list(windows.get(day.weekday()) or [budget])
         today_count = {}
+
+        def take(minutes_wanted):
+            """Reserve up to minutes_wanted (a multiple of 30) in the first window with room."""
+            nonlocal budget
+            for i, gap in enumerate(gaps):
+                room = (min(gap, budget) // BLOCK_MIN) * BLOCK_MIN
+                if room >= BLOCK_MIN:
+                    got = min(minutes_wanted, room)
+                    gaps[i] = gap - got - (BREAK_MIN if windows.get(day.weekday()) else 0)
+                    budget -= got
+                    return got, i
+            return 0, None
 
         # Revision block the day before each exam, on its weakest topic.
         for sid, exam in exams.items():
-            if cap >= BLOCK_MIN and exam - timedelta(days=1) == day and subj_by_id[sid].get('exam_date'):
+            if exam - timedelta(days=1) == day and subj_by_id[sid].get('exam_date'):
                 subj_topics = [t for t in topics if t['subject_id'] == sid]
                 if not subj_topics:
                     continue
                 weakest = min(subj_topics, key=lambda t: t.get('confidence') or 0)
-                minutes = min(BLOCK_MAX, cap)
-                plan.append({'date': day, 'topic_id': weakest['id'], 'subject_id': sid,
-                             'minutes': minutes, 'kind': 'revision'})
-                cap -= minutes
+                minutes, win = take(BLOCK_MAX)
+                if minutes:
+                    plan.append({'date': day, 'topic_id': weakest['id'], 'subject_id': sid,
+                                 'minutes': minutes, 'kind': 'revision', 'window': win})
 
-        while cap >= BLOCK_MIN:
+        while True:
             candidates = [t for t in topics if remaining[t['id']] > 0 and day < exams[t['subject_id']]]
             if not candidates:
                 break
             best = max(candidates, key=lambda t: topic_score(t, subj_by_id[t['subject_id']], day)
                        * SAME_DAY_PENALTY ** today_count.get(t['id'], 0))
-            minutes = min(BLOCK_MAX, remaining[best['id']], cap)
+            minutes, win = take(min(BLOCK_MAX, remaining[best['id']]))
+            if not minutes:
+                break
             plan.append({'date': day, 'topic_id': best['id'], 'subject_id': best['subject_id'],
-                         'minutes': minutes, 'kind': 'study'})
+                         'minutes': minutes, 'kind': 'study', 'window': win})
             remaining[best['id']] -= minutes
             today_count[best['id']] = today_count.get(best['id'], 0) + 1
-            cap -= minutes
         day += timedelta(days=1)
 
     return _merge_adjacent(plan)
 
 
 def _merge_adjacent(plan):
-    """Join back-to-back blocks of the same topic and kind on the same day."""
+    """Join back-to-back blocks of the same topic and kind in the same day and window."""
     merged = []
     for s in plan:
         prev = merged[-1] if merged else None
-        if prev and prev['date'] == s['date'] and prev['topic_id'] == s['topic_id'] and prev['kind'] == s['kind']:
+        if (prev and prev['date'] == s['date'] and prev['window'] == s['window']
+                and prev['topic_id'] == s['topic_id'] and prev['kind'] == s['kind']):
             prev['minutes'] += s['minutes']
         else:
             merged.append(dict(s))
+    for s in merged:
+        del s['window']
     return merged

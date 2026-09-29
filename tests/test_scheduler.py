@@ -1,6 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
+from studygpt.clock import assign_times
 from studygpt.scheduler import build_plan, topic_score, remaining_minutes
 
 TODAY = date(2026, 10, 1)  # a Thursday
@@ -101,6 +102,19 @@ class BuildPlanTest(unittest.TestCase):
         plan = build_plan([subj(1, 10)], [topic(i, 1, est_hours=5) for i in range(3)], EVERY_DAY_2H, TODAY,
                           used_today=90)
         self.assertEqual(sum(s['minutes'] for s in plan if s['date'] == TODAY), 30)
+
+    def test_windowed_plan_always_fits_clock_times(self):
+        wins = [['07:00', '08:30'], ['18:30', '21:30']]
+        lengths = [90, 180]
+        plan = build_plan([subj(1, 10), subj(2, 12)], [topic(i, 1 + i % 2, est_hours=6) for i in range(6)],
+                          {d: 240 for d in range(7)}, TODAY, windows={d: lengths for d in range(7)})
+        by_day = {}
+        for s in plan:
+            by_day.setdefault(s['date'], []).append(s['minutes'])
+        self.assertTrue(by_day)
+        for day, durations in by_day.items():
+            self.assertNotIn(None, assign_times(durations, wins), day)
+            self.assertLessEqual(sum(durations), 240)
 
     def test_subject_without_exam_still_gets_planned(self):
         s = {'id': 1, 'priority': 3, 'exam_date': None}

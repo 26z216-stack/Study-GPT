@@ -17,6 +17,11 @@ def availability_for(user):
     return {d: rows.get(d, DEFAULT_MINUTES) for d in range(7)}
 
 
+def _mins(hhmm):
+    h, m = hhmm.split(':')
+    return int(h) * 60 + int(m)
+
+
 def windows_for(user):
     """Free-time windows per weekday from the AI routine parser ({} if never set)."""
     out = {}
@@ -76,7 +81,9 @@ def replan(user, today=None):
               for s in subjects for t in s.topics]
     subj_dicts = [{'id': s.id, 'priority': s.priority, 'exam_date': s.exam_date} for s in subjects]
 
-    for block in build_plan(subj_dicts, topics, availability_for(user), today, used_today=used_today):
+    window_lengths = {d: [_mins(b) - _mins(a) for a, b in w] for d, w in windows_for(user).items() if w}
+    for block in build_plan(subj_dicts, topics, availability_for(user), today, used_today=used_today,
+                            windows=window_lengths):
         db.session.add(StudySession(user_id=user.id, topic_id=block['topic_id'], date=block['date'],
                                     minutes=block['minutes'], kind=block['kind']))
     user.last_replan = today
