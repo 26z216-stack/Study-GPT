@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Sign up{% endblock %}
+{% block body %}
+<div class="auth">
+  <div class="card">
+    <div class="brand"><span class="brand-mark">K</span> Kanal</div>
+    <p class="muted" style="text-align:center">Tell us your exams, syllabus and free time. Kanal builds the plan.</p>
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in msgs %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="name">Name</label><input id="name" name="name" required autofocus></div>
+      <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required></div>
+      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" minlength="6" required></div>
+      <button class="btn btn-primary" style="width:100%">Create account</button>
+    </form>
+    <p class="muted small" style="text-align:center;margin-top:14px">Already have one? <a href="{{ url_for('auth.login') }}">Log in</a></p>
+  </div>
+</div>
+{% endblock %}

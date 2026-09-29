@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Report{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Exam readiness report</h1>
+    <p class="muted" style="margin:0">Readiness = 40% syllabus coverage + 60% measured confidence (quizzes and Feynman).</p></div>
+  <button class="btn btn-primary" id="ai-btn">✨ AI analysis</button>
+</div>
+
+<div class="grid grid-3" style="margin-bottom:16px">
+  <section class="card" style="display:flex;gap:14px;align-items:center">
+    <div class="ring" style="--p:{{ overall }};width:90px;height:90px;--c:{{ 'var(--good)' if overall >= 70 else ('var(--warn)' if overall >= 40 else 'var(--bad)') }}"><div style="width:70px;height:70px;font-size:1.2rem">{{ overall }}%</div></div>
+    <div><b>Overall</b><div class="muted small">across all subjects</div></div>
+  </section>
+  <section class="card"><div class="muted small">Study time logged</div><div class="stat">{{ (minutes_done / 60)|round(1) }}h</div><div class="muted small">{{ sessions_done }} sessions completed</div></section>
+  <section class="card"><div class="muted small">Plan adherence</div><div class="stat">{{ adherence if adherence is not none else '—' }}{{ '%' if adherence is not none }}</div><div class="muted small">{{ missed }} missed (auto-rescheduled)</div></section>
+</div>
+
+<section class="card" id="ai-box" style="display:none;margin-bottom:16px"></section>
+
+<section class="card">
+  <h2>By subject</h2>
+  {% for r in rows %}
+    {% set s = r.subject %}
+    <div style="padding:14px 0;border-bottom:1px solid var(--border)">
+      <div class="row" style="justify-content:space-between">
+        <a href="{{ url_for('planner.syllabus', subject_id=s.id) }}" style="color:inherit"><span class="dot" style="background:{{ s.color }}"></span> <b>{{ s.name }}</b></a>
+        <span>
+          {% if s.exam_date %}<span class="pill {{ 'pill-bad' if s.days_left is not none and s.days_left <= 3 else '' }}">exam {{ s.exam_date.strftime('%d %b') }}</span>{% endif %}
+          <span class="pill {{ 'pill-good' if r.readiness >= 70 else ('pill-warn' if r.readiness >= 40 else 'pill-bad') }}">{{ r.readiness }}% ready</span>
+        </span>
+      </div>
+      <div class="bar" style="margin:8px 0"><span style="width:{{ r.readiness }}%;background:{{ s.color }}"></span></div>
+      <div class="row small muted" style="gap:14px">
+        <span>{{ r.done }}/{{ r.total }} topics done</span>
+        {% set weakest = s.topics | rejectattr('status', 'equalto', 'done') | sort(attribute='confidence') | first %}
+        {% if weakest %}<span>Weakest: <a href="{{ url_for('learn.topic', topic_id=weakest.id) }}">{{ weakest.name }}</a> ({{ weakest.confidence }}%)</span>{% endif %}
+      </div>
+    </div>
+  {% else %}<p class="muted">Add subjects to see your readiness.</p>{% endfor %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('ai-btn').addEventListener('click', async e => {
+  const data = await withBusy(e.currentTarget, 'Analysing…', () => postJSON('/report/ai'));
+  const box = document.getElementById('ai-box');
+  box.style.display = 'block';
+  if (data.error) { box.innerHTML = `<p class="flash flash-error" style="margin:0">${escapeHtml(data.error)}</p>`; return; }
+  box.innerHTML = `<h2>✨ ${escapeHtml(data.headline)}</h2>
+    <h3>Focus for the next 3 days</h3><ol>${data.focus.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ol>
+    ${data.risk ? `<p class="flash flash-info" style="margin:8px 0 0">⚠️ ${escapeHtml(data.risk)}</p>` : ''}`;
+});
+</script>
+{% endblock %}

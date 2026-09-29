@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Today{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="muted" style="margin:0">{{ today.strftime('%A, %d %B') }}</p>
+    <h1>Hi {{ current_user.name.split()[0] }}, here's your plan for today</h1>
+  </div>
+  <form method="post" action="{{ url_for('planner.replan_now') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn">🔄 Reschedule</button>
+  </form>
+</div>
+
+<div class="grid grid-main">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>Today's sessions</h2>
+        <span class="pill {{ 'pill-good' if planned_min and done_min >= planned_min else 'pill-accent' }}">{{ done_min }} / {{ planned_min }} min</span>
+      </div>
+      {% if planned_min %}<div class="bar" style="margin-bottom:14px"><span style="width:{{ (100 * done_min / planned_min)|round }}%;background:var(--good)"></span></div>{% endif %}
+      {% for s in todays %}
+        <div class="session {{ 'done' if s.status == 'done' }}">
+          <span class="stripe" style="background:{{ s.topic.subject.color }}"></span>
+          <div class="body">
+            <div class="title">{{ s.topic.name }}</div>
+            <div class="muted small">{{ s.topic.subject.name }} · {{ s.minutes }} min
+              {% if s.kind == 'revision' %}<span class="pill pill-warn">revision</span>{% endif %}
+              <span class="pill">confidence {{ s.topic.confidence }}%</span></div>
+          </div>
+          <div class="actions">
+            {% if s.status == 'planned' %}
+              <a class="btn btn-sm" href="{{ url_for('planner.focus', session=s.id) }}">⏱️ Focus</a>
+              <a class="btn btn-sm" href="{{ url_for('learn.topic', topic_id=s.topic_id) }}">🧠 Learn</a>
+              <form method="post" action="{{ url_for('planner.session_action', sid=s.id, action='done') }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-good">✓ Done</button></form>
+              <form method="post" action="{{ url_for('planner.session_action', sid=s.id, action='skip') }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-ghost" title="Can't do it today, move it">Skip ↷</button></form>
+            {% else %}
+              <form method="post" action="{{ url_for('planner.session_action', sid=s.id, action='undo') }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-ghost">Undo</button></form>
+            {% endif %}
+          </div>
+        </div>
+      {% else %}
+        <div class="empty">
+          <p>Nothing planned for today. 🎉</p>
+          <p class="small">Either it's a rest day, or add topics to your <a href="{{ url_for('planner.subjects') }}">syllabus</a> so Kanal can plan.</p>
+        </div>
+      {% endfor %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Needs attention</h2><a class="small" href="{{ url_for('planner.report') }}">Full report →</a></div>
+      {% for t in weak %}
+        <div class="session">
+          <span class="stripe" style="background:{{ t.subject.color }}"></span>
+          <div class="body"><div class="title">{{ t.name }}</div>
+            <div class="muted small">{{ t.subject.name }} · difficulty {{ t.difficulty }}/5 · confidence {{ t.confidence }}%</div></div>
+          <div class="actions"><a class="btn btn-sm" href="{{ url_for('learn.topic', topic_id=t.id) }}?tab=quiz">Take quiz</a>
+            <a class="btn btn-sm" href="{{ url_for('learn.topic', topic_id=t.id) }}?tab=feynman">Explain it</a></div>
+        </div>
+      {% else %}<p class="muted">All topics done. Great work!</p>{% endfor %}
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card" style="display:flex;gap:18px;align-items:center">
+      <div class="ring" style="--p:{{ overall }};--c:{{ 'var(--good)' if overall >= 70 else ('var(--warn)' if overall >= 40 else 'var(--bad)') }}"><div>{{ overall }}%</div></div>
+      <div><h2 style="margin:0">Exam readiness</h2>
+        <p class="muted small" style="margin:4px 0 0">Syllabus coverage and your quiz and Feynman scores combined.</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Upcoming exams</h2>
+      {% for s in upcoming_exams %}
+        {% set r = (rows | selectattr('subject', 'equalto', s) | first) %}
+        <div style="margin:12px 0">
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <span><span class="dot" style="background:{{ s.color }}"></span> <b>{{ s.name }}</b></span>
+            <span class="pill {{ 'pill-bad' if s.days_left <= 3 else ('pill-warn' if s.days_left <= 7 else '') }}">{{ 'Today!' if s.days_left == 0 else ('in ' ~ s.days_left ~ ' day' ~ ('s' if s.days_left != 1 else '')) }}</span>
+          </div>
+          <div class="bar" style="margin-top:6px"><span style="width:{{ r.readiness }}%;background:{{ s.color }}"></span></div>
+          <div class="muted small">{{ r.readiness }}% ready · {{ r.done }}/{{ r.total }} topics done</div>
+        </div>
+      {% else %}<p class="muted">No exam dates yet. <a href="{{ url_for('planner.subjects') }}">Add them</a> to get a sharper plan.</p>{% endfor %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Flashcards</h2><span class="pill {{ 'pill-warn' if due_cards else 'pill-good' }}">{{ due_cards }} due</span></div>
+      {% if due_cards %}<a class="btn btn-primary" href="{{ url_for('learn.review_page') }}">Review {{ due_cards }} card{{ 's' if due_cards != 1 }}</a>
+      {% else %}<p class="muted small" style="margin:0">Nothing due. Generate cards from any topic page.</p>{% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Ask your coach</h2>
+      <p class="muted small">"I only have 1 hour today, what should I do?"</p>
+      <a class="btn" href="{{ url_for('coach.chat') }}">💬 Open coach</a>
+    </section>
+  </div>
+</div>
+{% endblock %}

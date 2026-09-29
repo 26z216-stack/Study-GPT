@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Subjects{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Subjects & exams</h1>
+    <p class="muted" style="margin:0">Difficulty, priority and exam date drive how much time each subject gets.</p></div>
+</div>
+
+<div class="grid grid-main">
+  <div class="stack">
+    {% for s in subjects %}
+      <section class="card">
+        <div class="card-head">
+          <h2 style="margin:0"><span class="dot" style="background:{{ s.color }}"></span> {{ s.name }}</h2>
+          <div class="row" style="gap:6px">
+            {% if s.exam_date %}<span class="pill {{ 'pill-bad' if s.days_left is not none and s.days_left <= 3 else '' }}">Exam {{ s.exam_date.strftime('%d %b') }}</span>{% endif %}
+            <a class="btn btn-sm btn-primary" href="{{ url_for('planner.syllabus', subject_id=s.id) }}">Syllabus ({{ s.topics|length }}) →</a>
+          </div>
+        </div>
+        <details>
+          <summary class="muted small" style="cursor:pointer">Edit subject</summary>
+          <form method="post" action="{{ url_for('planner.edit_subject', subject_id=s.id) }}" style="margin-top:10px">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row">
+              <div class="field"><label>Name</label><input name="name" value="{{ s.name }}" required></div>
+              <div class="field"><label>Exam date</label><input type="date" name="exam_date" value="{{ s.exam_date or '' }}"></div>
+              <div class="field" style="flex:0"><label>Color</label><input type="color" name="color" value="{{ s.color }}"></div>
+            </div>
+            <div class="row">
+              <div class="field"><label>Difficulty (1–5)</label><select name="difficulty">{% for i in range(1,6) %}<option {{ 'selected' if s.difficulty == i }}>{{ i }}</option>{% endfor %}</select></div>
+              <div class="field"><label>Priority (1–5)</label><select name="priority">{% for i in range(1,6) %}<option {{ 'selected' if s.priority == i }}>{{ i }}</option>{% endfor %}</select></div>
+            </div>
+            <div class="row"><button class="btn btn-primary btn-sm">Save</button></div>
+          </form>
+          <form method="post" action="{{ url_for('planner.delete_subject', subject_id=s.id) }}" onsubmit="return confirm('Delete {{ s.name }} and all its topics?')" style="margin-top:8px">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-ghost btn-danger">Delete subject</button>
+          </form>
+        </details>
+      </section>
+    {% else %}
+      <section class="card empty">
+        <h2>👋 Let's set up your plan</h2>
+        <p>1. Add each subject with its exam date → 2. Add syllabus topics (or paste the syllabus and let AI split it) → 3. Set your free hours.</p>
+      </section>
+    {% endfor %}
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Add a subject</h2>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field"><label for="name">Name</label><input id="name" name="name" placeholder="e.g. Physics" required></div>
+        <div class="row">
+          <div class="field"><label>Exam date</label><input type="date" name="exam_date"></div>
+          <div class="field" style="flex:0"><label>Color</label><input type="color" name="color" value="{{ next_color }}"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Difficulty</label><select name="difficulty"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
+          <div class="field"><label>Priority</label><select name="priority"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%">Add subject</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Your free study hours</h2>
+      <p class="muted small">Kanal never plans more than this per day.</p>
+      <form method="post" action="{{ url_for('planner.save_availability') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% for d in range(7) %}
+          <div class="row" style="align-items:center;margin-bottom:6px">
+            <span style="width:44px;font-weight:700">{{ weekdays[d] }}</span>
+            <input type="range" min="0" max="10" step="0.5" name="day{{ d }}" value="{{ avail[d] / 60 }}" style="flex:1"
+                   oninput="this.nextElementSibling.textContent = this.value + 'h'">
+            <span style="width:40px;text-align:right" class="small">{{ avail[d] / 60 }}h</span>
+          </div>
+        {% endfor %}
+        <button class="btn btn-primary" style="width:100%;margin-top:8px">Save & replan</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

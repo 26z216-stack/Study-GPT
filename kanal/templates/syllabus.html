@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}{{ subject.name }}{% endblock %}
+{% block content %}
+{% set done = subject.topics | selectattr('status', 'equalto', 'done') | list | length %}
+{% set total = subject.topics | length %}
+<div class="page-head">
+  <div>
+    <a class="small" href="{{ url_for('planner.subjects') }}">← All subjects</a>
+    <h1><span class="dot" style="background:{{ subject.color }};width:14px;height:14px"></span> {{ subject.name }} syllabus</h1>
+    <p class="muted" style="margin:0">{{ done }}/{{ total }} topics done
+      {% if subject.exam_date %}· exam {{ subject.exam_date.strftime('%a %d %b') }} ({{ subject.days_left }} days){% endif %}</p>
+  </div>
+</div>
+{% if total %}<div class="bar" style="margin-bottom:18px"><span style="width:{{ (100 * done / total)|round }}%;background:{{ subject.color }}"></span></div>{% endif %}
+
+<div class="grid grid-main">
+  <section class="card">
+    <h2>Topics</h2>
+    {% if subject.topics %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Topic</th><th>Status</th><th>Diff.</th><th>Hours</th><th>Confidence</th><th></th></tr></thead>
+      <tbody>
+      {% for t in subject.topics %}
+        <tr>
+          <td style="min-width:160px"><a href="{{ url_for('learn.topic', topic_id=t.id) }}"><b>{{ t.name }}</b></a></td>
+          <td><select data-topic="{{ t.id }}" data-field="status">
+            {% for v, l in [('not_started', 'Not started'), ('in_progress', 'In progress'), ('done', 'Done ✓')] %}
+              <option value="{{ v }}" {{ 'selected' if t.status == v }}>{{ l }}</option>{% endfor %}</select></td>
+          <td><select data-topic="{{ t.id }}" data-field="difficulty" style="width:62px">{% for i in range(1,6) %}<option {{ 'selected' if t.difficulty == i }}>{{ i }}</option>{% endfor %}</select></td>
+          <td><input type="number" min="0.5" max="40" step="0.5" value="{{ t.est_hours }}" data-topic="{{ t.id }}" data-field="est_hours" style="width:72px"></td>
+          <td style="min-width:120px">
+            <div class="bar"><span style="width:{{ t.confidence }}%;background:{{ 'var(--good)' if t.confidence >= 70 else ('var(--warn)' if t.confidence >= 40 else 'var(--bad)') }}"></span></div>
+            <span class="small muted">{{ t.confidence }}%</span></td>
+          <td class="nowrap">
+            <a class="btn btn-sm" href="{{ url_for('learn.topic', topic_id=t.id) }}">Learn</a>
+            <form method="post" action="{{ url_for('planner.delete_topic', topic_id=t.id) }}" class="inline" onsubmit="return confirm('Delete this topic?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-ghost btn-danger" title="Delete">✕</button></form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="muted small" style="margin-top:10px">Changes save automatically and your timetable is regenerated. Confidence updates itself from quizzes and Feynman scores.</p>
+    {% else %}
+      <div class="empty">No topics yet. Paste your syllabus on the right and let AI split it, or add topics one by one.</div>
+    {% endif %}
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2>✨ Import syllabus with AI</h2>
+      <p class="muted small">Paste the syllabus or unit list. AI splits it into topics with difficulty and time estimates.</p>
+      <form method="post" action="{{ url_for('planner.import_syllabus', subject_id=subject.id) }}" data-busy="Reading syllabus…">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <textarea name="syllabus" placeholder="Unit 1: Kinematics – motion in 1D, 2D, projectile motion&#10;Unit 2: Laws of motion – Newton's laws, friction…" required></textarea>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px">Generate topics</button>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Add a topic</h2>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field"><label>Topic</label><input name="name" required placeholder="e.g. Projectile motion"></div>
+        <div class="row">
+          <div class="field"><label>Difficulty</label><select name="difficulty"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
+          <div class="field"><label>Hours needed</label><input type="number" name="est_hours" value="2" min="0.5" max="40" step="0.5"></div>
+        </div>
+        <button class="btn" style="width:100%">Add topic</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  document.querySelectorAll('[data-topic]').forEach(el => {
+    el.addEventListener('change', async () => {
+      const body = new URLSearchParams({ [el.dataset.field]: el.value, csrf_token: csrf });
+      el.style.opacity = .5;
+      await fetch('/topics/' + el.dataset.topic + '/edit', { method: 'POST', body, headers: { 'Accept': 'application/json' } });
+      el.style.opacity = 1;
+      if (el.dataset.field === 'status') location.reload();
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Review{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Flashcard review</h1>
+    <p class="muted" style="margin:0">Spaced repetition: cards you know come back less often, and cards you miss come back sooner.</p></div>
+  <span class="pill pill-accent" id="left">{{ cards|length }} due</span>
+</div>
+
+{% if cards %}
+  <div id="reviewer">
+    <p class="muted small" style="text-align:center" id="meta"></p>
+    <div class="flashcard" id="card"><div class="inner">
+      <div class="face front" id="front"></div>
+      <div class="face back" id="back"></div>
+    </div></div>
+    <p class="muted small" style="text-align:center" id="hint">Click the card (or press Space) to reveal the answer</p>
+    <div class="grades" id="grades" style="visibility:hidden">
+      <button class="btn" data-g="again" style="color:var(--bad)">Again<br><span class="small muted">today</span></button>
+      <button class="btn" data-g="hard" style="color:var(--warn)">Hard</button>
+      <button class="btn" data-g="good" style="color:var(--good)">Good</button>
+      <button class="btn" data-g="easy" style="color:var(--accent)">Easy</button>
+    </div>
+  </div>
+  <div class="card empty" id="finished" style="display:none">
+    <h2>🎉 All caught up!</h2>
+    <p>Come back tomorrow for the next batch.</p>
+    <a class="btn btn-primary" href="{{ url_for('planner.dashboard') }}">Back to today</a>
+  </div>
+{% else %}
+  <div class="card empty">
+    <h2>Nothing due right now</h2>
+    <p>{{ upcoming }} card(s) scheduled for later. Generate more from any topic page.</p>
+    <a class="btn" href="{{ url_for('planner.subjects') }}">Go to syllabus</a>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if cards %}
+<script>
+const queue = {{ cards|tojson }};
+const cardEl = document.getElementById('card'), grades = document.getElementById('grades');
+let current = null;
+
+function next() {
+  document.getElementById('left').textContent = queue.length + ' due';
+  if (!queue.length) {
+    document.getElementById('reviewer').style.display = 'none';
+    document.getElementById('finished').style.display = 'block';
+    return;
+  }
+  current = queue.shift();
+  cardEl.classList.remove('flipped');
+  grades.style.visibility = 'hidden';
+  setTimeout(() => {
+    document.getElementById('front').textContent = current.front;
+    document.getElementById('back').textContent = current.back;
+  }, 150);
+  document.getElementById('meta').innerHTML =
+    `<span class="dot" style="background:${current.color}"></span> ${escapeHtml(current.subject)} · ${escapeHtml(current.topic)}`;
+}
+function flip() { cardEl.classList.add('flipped'); grades.style.visibility = 'visible'; }
+cardEl.addEventListener('click', flip);
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); flip(); }
+  const map = { Digit1: 'again', Digit2: 'hard', Digit3: 'good', Digit4: 'easy' };
+  if (map[e.code] && cardEl.classList.contains('flipped')) grade(map[e.code]);
+});
+grades.querySelectorAll('button').forEach(b => b.addEventListener('click', () => grade(b.dataset.g)));
+
+async function grade(g) {
+  const card = current;
+  if (g === 'again') queue.push(card);   // see it again this session
+  next();
+  await postJSON(`/flashcard/${card.id}/review`, { grade: g });
+}
+next();
+</script>
+{% endif %}
+{% endblock %}

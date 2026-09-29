@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Focus{% endblock %}
+{% block content %}
+<section class="card focus-wrap">
+  {% if session %}
+    <span class="pill pill-accent"><span class="dot" style="background:{{ session.topic.subject.color }}"></span> {{ session.topic.subject.name }}</span>
+    <h1 style="margin-top:10px">{{ session.topic.name }}</h1>
+    <p class="muted">Planned: {{ session.minutes }} min {{ '(revision)' if session.kind == 'revision' }}</p>
+  {% else %}
+    <h1>Focus timer</h1>
+    <p class="muted">Start one from a session on the Today page to link it to your plan.</p>
+  {% endif %}
+
+  <div class="presets" id="presets">
+    <button class="btn btn-sm" data-min="25">Pomodoro 25</button>
+    <button class="btn btn-sm" data-min="50">Deep 50</button>
+    {% if session %}<button class="btn btn-sm" data-min="{{ session.minutes }}">Full session {{ session.minutes }}</button>{% endif %}
+    <button class="btn btn-sm" data-min="5">Break 5</button>
+  </div>
+  <div class="clock" id="clock">25:00</div>
+  <div class="row" style="justify-content:center">
+    <button class="btn btn-primary" id="start">▶ Start</button>
+    <button class="btn" id="pause" style="display:none">⏸ Pause</button>
+    <button class="btn btn-ghost" id="reset">Reset</button>
+  </div>
+  {% if session and session.status == 'planned' %}
+    <form method="post" action="{{ url_for('planner.session_action', sid=session.id, action='done') }}" id="done-form" style="margin-top:22px;display:none">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p><b>Time's up!</b> Did you finish this session?</p>
+      <button class="btn btn-good">✓ Mark session done</button>
+      <a class="btn" href="{{ url_for('learn.topic', topic_id=session.topic_id) }}?tab=quiz">Quiz myself on it</a>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='focus_timer_core.js') }}"></script>
+<script>
+// Timer state lives in localStorage and is derived from the clock (FocusTimerCore),
+// so leaving the page or sleeping the laptop doesn't lose or distort time.
+const KEY = 'kanal-focus', C = FocusTimerCore;
+const clock = document.getElementById('clock'), startBtn = document.getElementById('start'),
+      pauseBtn = document.getElementById('pause'), doneForm = document.getElementById('done-form');
+let chosen = {{ (session.minutes if session and session.minutes <= 60 else 25) }};
+let state = null;
+try { state = JSON.parse(localStorage.getItem(KEY)); if (!C.isValid(state)) state = null; } catch (e) {}
+
+function save() { try { state ? localStorage.setItem(KEY, JSON.stringify(state)) : localStorage.removeItem(KEY); } catch (e) {} }
+function fmt(s) { return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+function render() {
+  const secs = state ? C.remainingSecs(state) : chosen * 60;
+  clock.textContent = fmt(secs);
+  document.title = (state && !state.pausedAt ? fmt(secs) + ' · ' : '') + 'Focus · Kanal';
+  startBtn.style.display = state && !state.pausedAt ? 'none' : '';
+  startBtn.textContent = state && state.pausedAt ? '▶ Resume' : '▶ Start';
+  pauseBtn.style.display = state && !state.pausedAt ? '' : 'none';
+  if (state && C.isComplete(state)) {
+    clock.textContent = '00:00';
+    if (!state.notified) {
+      state.notified = true; save();
+      try { new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=').play(); } catch (e) {}
+      if ('Notification' in window && Notification.permission === 'granted') new Notification('Kanal: session complete!');
+    }
+    if (doneForm) doneForm.style.display = 'block';
+  }
+}
+document.querySelectorAll('#presets button').forEach(b => b.addEventListener('click', () => {
+  chosen = +b.dataset.min; state = null; save(); render();
+}));
+startBtn.addEventListener('click', () => {
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  state = state && state.pausedAt ? C.resume(state) : C.createSession({ mode: 'timer', durationSecs: chosen * 60 });
+  save(); render();
+});
+pauseBtn.addEventListener('click', () => { state = C.pause(state); save(); render(); });
+document.getElementById('reset').addEventListener('click', () => { state = null; save(); if (doneForm) doneForm.style.display = 'none'; render(); });
+setInterval(render, 500);
+render();
+</script>
+{% endblock %}

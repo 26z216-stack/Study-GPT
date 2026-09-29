@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Timetable{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Timetable</h1>
+    <p class="muted" style="margin:0">{{ days[0].strftime('%d %b') }} – {{ days[-1].strftime('%d %b %Y') }} · regenerates itself when you skip, miss or finish work.</p></div>
+  <div class="row" style="gap:6px">
+    <a class="btn btn-sm" href="?week={{ offset - 1 }}">←</a>
+    <a class="btn btn-sm" href="?week=0">This week</a>
+    <a class="btn btn-sm" href="?week={{ offset + 1 }}">→</a>
+    <a class="btn btn-sm" href="{{ url_for('planner.timetable_ics') }}" title="Import into Google Calendar / Outlook">📅 Export .ics</a>
+    <form method="post" action="{{ url_for('planner.replan_now') }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-primary">🔄 Reschedule</button></form>
+  </div>
+</div>
+
+<div class="week">
+  {% for d in days %}
+    {% set list = by_day[d] %}
+    {% set used = list | rejectattr('status', 'equalto', 'missed') | sum(attribute='minutes') %}
+    <div class="day {{ 'today' if d == today }} {{ 'past' if d < today }}">
+      <div class="day-head"><b>{{ d.strftime('%a') }} {{ d.day }}</b><span class="muted small">{{ used }}/{{ avail[d.weekday()] }}m</span></div>
+      {% if d in exams %}<div class="exam-flag">📝 {{ exams[d].name }} EXAM</div>{% endif %}
+      {% for s in list %}
+        <a class="slot {{ s.status }}" style="border-color:{{ s.topic.subject.color }};color:inherit;display:block;text-decoration:none"
+           href="{{ url_for('learn.topic', topic_id=s.topic_id) }}" title="{{ s.topic.subject.name }}: {{ s.topic.name }}">
+          <b>{{ s.topic.name }}</b>
+          <span class="muted">{{ s.topic.subject.name }} · {{ s.minutes }}m</span>
+          {% if s.kind == 'revision' %}<span class="pill pill-warn">revise</span>{% endif %}
+          {% if s.status == 'done' %}<span class="pill pill-good">done</span>{% elif s.status == 'missed' %}<span class="pill pill-bad">missed</span>{% endif %}
+        </a>
+      {% else %}
+        {% if d not in exams %}<p class="muted small">{{ 'Rest day' if avail[d.weekday()] == 0 else '—' }}</p>{% endif %}
+      {% endfor %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

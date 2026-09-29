@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Coach{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>AI study coach</h1>
+    <p class="muted" style="margin:0">Knows your subjects, exam dates, timetable and weak topics.</p></div>
+  <form method="post" action="{{ url_for('coach.clear') }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-ghost">Clear chat</button></form>
+</div>
+<section class="card chat">
+  <div class="chat-log" id="log">
+    {% if not messages %}
+      <div class="msg coach">Hi {{ current_user.name.split()[0] }}! I'm your study coach. Ask me what to focus on, how to catch up, or how to tackle a tricky topic.</div>
+    {% endif %}
+    {% for m in messages %}<div class="msg {{ m.role }}">{{ m.content }}</div>{% endfor %}
+  </div>
+  <div class="chips">{% for s in suggestions %}<button class="chip" type="button">{{ s }}</button>{% endfor %}</div>
+  <form class="chat-form" id="form">
+    <input id="input" placeholder="Ask your coach…" autocomplete="off" required>
+    <button class="btn btn-primary">Send</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const log = document.getElementById('log'), input = document.getElementById('input'), form = document.getElementById('form');
+log.scrollTop = log.scrollHeight;
+function add(role, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  return d;
+}
+async function send(text) {
+  add('user', text);
+  input.value = '';
+  const typing = add('coach', '…');
+  const btn = form.querySelector('button');
+  btn.disabled = true;
+  const data = await postJSON('/coach/send', { message: text });
+  btn.disabled = false;
+  typing.textContent = data.error ? '⚠️ ' + data.error : data.reply;
+  log.scrollTop = log.scrollHeight;
+}
+form.addEventListener('submit', e => { e.preventDefault(); if (input.value.trim()) send(input.value.trim()); });
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => send(c.textContent)));
+</script>
+{% endblock %}

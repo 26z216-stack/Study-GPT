@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% block title %}{{ topic.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="small" href="{{ url_for('planner.syllabus', subject_id=topic.subject_id) }}">← {{ topic.subject.name }}</a>
+    <h1>{{ topic.name }}</h1>
+    <div class="row" style="gap:6px">
+      <span class="pill">difficulty {{ topic.difficulty }}/5</span>
+      <span class="pill {{ 'pill-good' if topic.status == 'done' else ('pill-accent' if topic.status == 'in_progress' else '') }}">{{ topic.status.replace('_', ' ') }}</span>
+      <span class="pill" id="conf-pill">confidence {{ topic.confidence }}%</span>
+    </div>
+  </div>
+  <a class="btn" href="{{ url_for('planner.focus') }}">⏱️ Focus timer</a>
+</div>
+
+<div class="tabs">
+  <button class="tab" data-tab="quiz">🤖 AI Quiz</button>
+  <button class="tab" data-tab="cards">🃏 Flashcards ({{ topic.flashcards|length }})</button>
+  <button class="tab" data-tab="feynman">🧠 Feynman Technique</button>
+</div>
+
+<!-- QUIZ -->
+<div class="tab-panel" id="tab-quiz">
+  <div class="grid grid-main">
+    <section class="card">
+      <div id="quiz-area" class="empty">
+        <p>Test yourself with 5 AI-generated questions. Your score updates this topic's confidence, and the scheduler re-prioritises your plan.</p>
+        <button class="btn btn-primary" id="quiz-start">Generate quiz</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Past attempts</h2>
+      {% for q in quizzes %}
+        <div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small muted">{{ q.created_at.strftime('%d %b %H:%M') }}</span>
+          <span class="pill {{ 'pill-good' if q.score / q.total >= 0.7 else ('pill-warn' if q.score / q.total >= 0.4 else 'pill-bad') }}">{{ q.score }}/{{ q.total }}</span></div>
+      {% else %}<p class="muted small">No quizzes yet.</p>{% endfor %}
+    </section>
+  </div>
+</div>
+
+<!-- FLASHCARDS -->
+<div class="tab-panel" id="tab-cards">
+  <div class="grid grid-main">
+    <section class="card">
+      <div class="card-head"><h2>Cards</h2>
+        {% if due %}<a class="btn btn-primary btn-sm" href="{{ url_for('learn.review_page', topic=topic.id) }}">Review {{ due }} due</a>{% endif %}</div>
+      {% for c in topic.flashcards %}
+        <details style="border-bottom:1px solid var(--border);padding:8px 0">
+          <summary style="cursor:pointer;font-weight:600">{{ c.front }}</summary>
+          <p style="margin:6px 0 0">{{ c.back }}</p>
+          <span class="small muted">next review {{ c.due.strftime('%d %b') }} · interval {{ c.interval }}d</span>
+        </details>
+      {% else %}<p class="muted">No cards yet. Generate a set with AI.</p>{% endfor %}
+    </section>
+    <div class="stack">
+      <section class="card">
+        <h2>✨ Generate with AI</h2>
+        <p class="muted small">8 cards on this topic, scheduled with spaced repetition (SM-2).</p>
+        <button class="btn btn-primary" id="cards-gen" style="width:100%">Generate flashcards</button>
+      </section>
+      <section class="card">
+        <h2>Add your own</h2>
+        <form id="card-add">
+          <div class="field"><label>Front</label><input name="front" required></div>
+          <div class="field"><label>Back</label><input name="back" required></div>
+          <button class="btn" style="width:100%">Add card</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- FEYNMAN -->
+<div class="tab-panel" id="tab-feynman">
+  <div class="grid grid-2">
+    <section class="card">
+      <h2>Explain it like you're teaching a 12-year-old</h2>
+      <p class="muted small">The Feynman Technique: if you can't explain it simply, you don't understand it yet. Write your explanation without looking at notes, and the AI will find the gaps.</p>
+      <textarea id="feyn-text" rows="10" placeholder="{{ topic.name }} is basically…"></textarea>
+      <div class="row" style="justify-content:space-between;margin-top:8px">
+        <span class="small muted" id="feyn-count">0 words</span>
+        <button class="btn btn-primary" id="feyn-go">Check my understanding</button>
+      </div>
+    </section>
+    <section class="card" id="feyn-result">
+      {% if feynmans %}
+        {% set f = feynmans[0] %}
+        <h2>Last attempt: {{ f.score }}/100</h2>
+        <div class="fb">
+          {% if f.parsed.gaps %}<h3>🕳️ Gaps</h3><ul>{% for g in f.parsed.gaps %}<li>{{ g }}</li>{% endfor %}</ul>{% endif %}
+          {% if f.parsed.analogy %}<h3>💡 Try this analogy</h3><p>{{ f.parsed.analogy }}</p>{% endif %}
+        </div>
+      {% else %}
+        <div class="empty"><p>Your feedback will appear here: strengths, gaps, misconceptions, unexplained jargon, and a simple analogy.</p></div>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TOPIC = {{ topic.id }};
+const confPill = document.getElementById('conf-pill');
+
+// Tabs
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  history.replaceState(null, '', '?tab=' + name);
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+showTab({{ tab|tojson }} in {quiz: 1, cards: 1, feynman: 1} ? {{ tab|tojson }} : 'quiz');
+
+function confMsg(before, after) {
+  confPill.textContent = 'confidence ' + after + '%';
+  const arrow = after > before ? '▲' : (after < before ? '▼' : '•');
+  return `Confidence ${before}% → <b>${after}%</b> ${arrow}. Your timetable has been re-prioritised.`;
+}
+
+// Quiz
+const quizArea = document.getElementById('quiz-area');
+async function startQuiz(btn) {
+  const data = await withBusy(btn, 'Writing questions…', () => postJSON(`/topic/${TOPIC}/quiz`));
+  if (data.error) { alert(data.error); return; }
+  renderQuiz(data.questions);
+}
+document.getElementById('quiz-start').addEventListener('click', e => startQuiz(e.currentTarget));
+
+function renderQuiz(qs) {
+  quizArea.className = '';
+  quizArea.innerHTML = qs.map((q, i) => `
+    <div class="q" data-i="${i}">
+      <div class="q-text">${i + 1}. ${escapeHtml(q.q)}</div>
+      ${q.options.map((o, j) => `<button type="button" class="opt" data-j="${j}">${escapeHtml(o)}</button>`).join('')}
+      <div class="why">${escapeHtml(q.why || '')}</div>
+    </div>`).join('') + `<button class="btn btn-primary" id="quiz-submit">Submit answers</button><div id="quiz-score"></div>`;
+  const picks = {};
+  quizArea.querySelectorAll('.q').forEach(qEl => qEl.querySelectorAll('.opt').forEach(o => o.addEventListener('click', () => {
+    if (quizArea.classList.contains('graded')) return;
+    qEl.querySelectorAll('.opt').forEach(x => x.classList.remove('picked'));
+    o.classList.add('picked');
+    picks[qEl.dataset.i] = +o.dataset.j;
+  })));
+  document.getElementById('quiz-submit').addEventListener('click', async e => {
+    if (Object.keys(picks).length < qs.length && !confirm('Some questions are unanswered. Submit anyway?')) return;
+    let score = 0;
+    quizArea.classList.add('graded');
+    quizArea.querySelectorAll('.q').forEach(qEl => {
+      const q = qs[qEl.dataset.i], pick = picks[qEl.dataset.i];
+      qEl.querySelectorAll('.opt').forEach(o => {
+        const j = +o.dataset.j;
+        if (j === q.answer) o.classList.add('right');
+        else if (j === pick) o.classList.add('wrong');
+      });
+      if (pick === q.answer) score++;
+    });
+    e.currentTarget.remove();
+    const res = await postJSON(`/topic/${TOPIC}/quiz/submit`, { score, total: qs.length });
+    document.getElementById('quiz-score').innerHTML = `
+      <div class="flash flash-${score / qs.length >= .7 ? 'success' : 'info'}" style="margin-top:12px">
+        You scored <b>${score}/${qs.length}</b>. ${res.error ? escapeHtml(res.error) : confMsg(res.confidence_before, res.confidence)}
+      </div><button class="btn" onclick="location.reload()">Take another</button>`;
+  });
+}
+
+// Flashcards
+document.getElementById('cards-gen').addEventListener('click', async e => {
+  const data = await withBusy(e.currentTarget, 'Making cards…', () => postJSON(`/topic/${TOPIC}/flashcards`));
+  if (data.error) { alert(data.error); return; }
+  location.href = '?tab=cards';
+});
+document.getElementById('card-add').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  fd.append('csrf_token', document.querySelector('meta[name="csrf-token"]').content);
+  await fetch(`/topic/${TOPIC}/flashcards/add`, { method: 'POST', body: fd });
+  location.href = '?tab=cards';
+});
+
+// Feynman
+const feynText = document.getElementById('feyn-text');
+feynText.addEventListener('input', () => {
+  document.getElementById('feyn-count').textContent = (feynText.value.trim().split(/\s+/).filter(Boolean).length) + ' words';
+});
+function list(title, items) {
+  return items && items.length ? `<h3>${title}</h3><ul>${items.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : '';
+}
+document.getElementById('feyn-go').addEventListener('click', async e => {
+  const data = await withBusy(e.currentTarget, 'Reading your explanation…',
+    () => postJSON(`/topic/${TOPIC}/feynman`, { explanation: feynText.value }));
+  if (data.error) { alert(data.error); return; }
+  const colour = data.score >= 70 ? 'var(--good)' : (data.score >= 40 ? 'var(--warn)' : 'var(--bad)');
+  document.getElementById('feyn-result').innerHTML = `
+    <div style="display:flex;gap:16px;align-items:center;margin-bottom:8px">
+      <div class="ring" style="--p:${data.score};--c:${colour};width:90px;height:90px"><div style="width:70px;height:70px;font-size:1.2rem">${data.score}</div></div>
+      <p class="small" style="margin:0">${confMsg(data.confidence_before, data.confidence)}</p>
+    </div>
+    <div class="fb">
+      ${list('✅ What you got right', data.strengths)}
+      ${list('🕳️ Gaps in your explanation', data.gaps)}
+      ${list('⚠️ Misconceptions', data.misconceptions)}
+      ${list('🔤 Jargon you didn\'t explain', data.jargon)}
+      ${data.analogy ? `<h3>💡 Try this analogy</h3><p>${escapeHtml(data.analogy)}</p>` : ''}
+      ${data.next_step ? `<h3>👉 Next step</h3><p>${escapeHtml(data.next_step)}</p>` : ''}
+    </div>`;
+});
+</script>
+{% endblock %}
