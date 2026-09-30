@@ -1,10 +1,14 @@
 """Gemini calls. Every helper returns parsed JSON or raises AIError with a user-facing message."""
 import json
 import os
+import time
 
 import requests
 
-MODEL_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+API = 'https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent'
+# Tried in order: when a model is overloaded (429/5xx) the next one takes over.
+MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash']
+RETRYABLE = {429, 500, 502, 503, 504}
 
 
 class AIError(Exception):
@@ -15,23 +19,34 @@ def ask_json(prompt, timeout=60):
     api_key = os.environ.get('GEMINI_API_KEY', '')
     if not api_key:
         raise AIError('AI is not configured. Add GEMINI_API_KEY to your .env file.')
-    try:
-        resp = requests.post(
-            MODEL_URL,
-            params={'key': api_key},
-            json={'contents': [{'parts': [{'text': prompt}]}],
-                  # thinkingBudget 0 turns off 2.5 Flash's reasoning pass: ~5x faster, fine for these tasks
-                  'generationConfig': {'responseMimeType': 'application/json',
-                                       'thinkingConfig': {'thinkingBudget': 0}}},
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        text = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        return json.loads(text)
-    except requests.RequestException as e:
-        raise AIError(f'The AI service could not be reached ({e.__class__.__name__}). Try again.') from e
-    except (KeyError, IndexError, ValueError) as e:
-        raise AIError('The AI returned an unexpected answer. Try again.') from e
+    config = {'responseMimeType': 'application/json'}
+    last_error = None
+    for attempt, model in enumerate(MODELS + MODELS[:1]):
+        if attempt == len(MODELS):
+            time.sleep(2)   # every model busy: one last try on the main model after a pause
+        gen = dict(config)
+        if model.startswith('gemini-2.5'):
+            # thinkingBudget 0 turns off 2.5's reasoning pass: ~5x faster, fine for these tasks
+            gen['thinkingConfig'] = {'thinkingBudget': 0}
+        try:
+            resp = requests.post(API.format(model), params={'key': api_key},
+                                 json={'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': gen},
+                                 timeout=timeout)
+        except requests.RequestException as e:
+            last_error = e
+            continue
+        if resp.status_code in RETRYABLE:
+            last_error = f'HTTP {resp.status_code}'
+            continue
+        try:
+            resp.raise_for_status()
+            text = resp.json()['candidates'][0]['content']['parts'][0]['text']
+            return json.loads(text)
+        except requests.RequestException as e:
+            raise AIError(f'The AI service returned an error ({resp.status_code}). Try again.') from e
+        except (KeyError, IndexError, ValueError) as e:
+            raise AIError('The AI returned an unexpected answer. Try again.') from e
+    raise AIError(f'The AI service is busy right now ({last_error}). Try again in a minute.')
 
 
 def split_syllabus(subject_name, syllabus_text):
