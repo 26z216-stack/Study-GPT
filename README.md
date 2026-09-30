@@ -13,6 +13,13 @@ StudyGPT generates a **personalized study schedule** from your **exam dates**, *
 
 ---
 
+## 🎬 Demo
+
+- ▶️ **Demo video (≈3 min):** [docs/demo/studygpt-demo.mp4](https://github.com/26z216-stack/Study-GPT/blob/main/docs/demo/studygpt-demo.mp4)
+- 📄 **Screenshots (PDF):** [docs/demo/studygpt-screenshots.pdf](https://github.com/26z216-stack/Study-GPT/blob/main/docs/demo/studygpt-screenshots.pdf)
+
+---
+
 ## ✨ Features
 
 ### Planning (the core)
